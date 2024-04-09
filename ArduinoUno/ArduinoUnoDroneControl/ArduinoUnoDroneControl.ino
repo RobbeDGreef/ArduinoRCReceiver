@@ -1,19 +1,13 @@
-/* You can choose any PWM pin (pins 0-7 AFAIK) */
-#define THROTTLEPIN   2
-#define STEERINGPIN   7
-
-// TODO: i don't know which pins would be used here so I 
-const int channel_pins[] = {
-    2,
-    3,
-    4,
-    5,
-}
-
+#include "ppm.h"
 
 /* The serial connection info */
 #define BAUDRATE      9600
 #define SERIAL_CONFIG SERIAL_8N1 /* Means 8 bytes of data, no parity enabled and 1 stop bit */  
+
+#define THROTTLE    3
+#define ROLL        1
+#define PITCH       2
+#define YAW         4
 
 /* Because the serial.write() only writes bytes */
 void writeserial(uint16_t data)
@@ -28,18 +22,20 @@ void setup()
     /* Setting up serial */
     Serial.begin(BAUDRATE, SERIAL_CONFIG);
 
-    /* Setting up the receiving pins */
-    pinMode(STEERINGPIN, INPUT);
-    pinMode(THROTTLEPIN, INPUT);
+    ppm.begin(A0, false);
 }
 
 void loop()
 {
-    uint16_t steering = pulseIn(STEERINGPIN, HIGH);
-    uint16_t throttle = pulseIn(THROTTLEPIN, HIGH);
+    uint16_t throttle = ppm.read_channel(THROTTLE);
+    uint16_t roll = ppm.read_channel(ROLL);
+    uint16_t pitch = ppm.read_channel(PITCH);
+    uint16_t yaw = ppm.read_channel(YAW);
 
     /* Sending a start byte first */
-    Serial.write(0);
-    writeserial(steering);
+    Serial.write((char)0);
     writeserial(throttle);
+    writeserial(roll);
+    writeserial(pitch);
+    writeserial(yaw);
 }

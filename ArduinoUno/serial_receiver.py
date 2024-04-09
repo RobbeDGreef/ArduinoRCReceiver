@@ -1,5 +1,5 @@
 import serial
-import pyvjoy
+import vgamepad as vg
 from config import *
 
 _running = True
@@ -8,22 +8,8 @@ _running = True
 def remap(value, min1, max1, min2, max2):
     return int(min2 + (value - min1) * (max2 - min2) / (max1 - min1))
 
-
-def translate_throttle(value):
-    return remap(value, THROTTLE_MIN, THROTTLE_MAX, JOYSTICK_MIN, JOYSTICK_MAX)
-
-
-def translate_steering(value):
-    return remap(value, STEERING_MIN, STEERING_MAX, JOYSTICK_MIN, JOYSTICK_MAX)
-
-
-def set_axisX(joystick, value):
-    joystick.data.wAxisX = value
-
-
-def set_axisY(joystick, value):
-    joystick.data.wAxisY = value
-
+def translate_value(value, minmax):
+    return remap(value, minmax[0], minmax[1], -1.0, 1.0)
 
 def open_serial():
     try:
@@ -42,33 +28,18 @@ def main():
     ser = open_serial()
     print("Serial connected to ", CONNECTIONPORT)
 
-    # Then create the joystick
+    # Then create the gamepad
     try:
-        joystick = pyvjoy.VJoyDevice(1)
-    except pyvjoy.vJoyNotEnabledException as e:
-        print("Failed to create virtual joystick device.")
-        print("Are the vJoy drivers installed?")
+        gamepad = vg.VX360Gamepad()
+    except Exception as e:
+        print("Failed to create virtual gamepad device.")
+        print("Are the vgamepad drivers installed?")
         print("Error message:\n", e)
         exit(1)
 
-    # Resetting the joystick to make sure all states are default and no buttons are pressed
-    joystick.reset()
-    print("Virtual joystick connection made")
+    print("Virtual gamepad connection made")
 
-    # Now interpret the config file
-    throttle_axis = None
-    steering_axis = None
-    if THROTTLE_AXIS == 'X':
-        throttle_axis = set_axisX
-        steering_axis = set_axisY
-
-    elif THROTTLE_AXIS == 'Y':
-        throttle_axis = set_axisY
-        steering_axis = set_axisX
-
-    else:
-        print("ERROR: Throttle axis is not valid")
-        exit(1)
+    gamepad.reset()
 
     print("Mainloop started without any problems")
     print("\n")
@@ -79,15 +50,26 @@ def main():
         if startbyte != b'\x00':
             continue
 
-        steering = int.from_bytes(ser.read(2), "big")
-        throttle = int.from_bytes(ser.read(2), "big")
+        values = []
+        for i in range(CHANNEL_COUNT):
+            values.append(int.from_bytes(ser.read(2), "big"))
 
-        #print("steering: %i throttle: %i" % (steering, throttle))
+        # Remap the values from raw to joystick values
+        for i, v in enumerate(values):
+            values[i] = translate_value(v, CHANNEL_MINMAX[i])
 
-        steering_axis(joystick, translate_steering(steering))
-        throttle_axis(joystick, translate_throttle(throttle))
+        channel_to_value_map = {c: i for i, c in enumerate(CHANNEL_AXISES)}
 
-        joystick.update()
+        x1 = values[channel_to_value_map['X1']]
+        y1 = values[channel_to_value_map['Y1']]
+        x2 = values[channel_to_value_map['X2']]
+        y2 = values[channel_to_value_map['Y2']]
+
+
+        gamepad.left_joystick(x_value_float=x1, y_value_float=y1)
+        gamepad.right_joystick(x_value_float=x2, y_value_float=y2)
+
+        gamepad.update()
 
 
 if __name__ == '__main__':
